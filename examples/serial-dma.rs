@@ -11,7 +11,8 @@
 #![no_main]
 #![no_std]
 
-use core::{mem, mem::MaybeUninit};
+use core::sync::atomic::{AtomicBool, Ordering};
+use core::{cell::UnsafeCell, mem, mem::MaybeUninit};
 
 use cortex_m_rt::entry;
 #[macro_use]
@@ -23,6 +24,34 @@ use stm32h7xx_hal::dma::{
     MemoryToPeripheral, Transfer,
 };
 
+struct BorrowOnce<T> {
+    data: UnsafeCell<T>,
+    is_taken: AtomicBool,
+}
+
+unsafe impl<T: Sync> Sync for BorrowOnce<T> {}
+
+impl<T> BorrowOnce<T> {
+    const fn new(data: T) -> Self {
+        Self {
+            data: UnsafeCell::new(data),
+            is_taken: AtomicBool::new(false),
+        }
+    }
+
+    /// Calling this more than once WILL lead to a panic
+    #[allow(clippy::mut_from_ref)]
+    fn get_mut(&self) -> &mut T {
+        assert!(
+            !self.is_taken.swap(true, Ordering::SeqCst),
+            "Already borrowed"
+        );
+
+        //NOTE(unsafe) We have just checked that we are the only ones to hold a reference to this
+        unsafe { &mut *self.data.get() }
+    }
+}
+
 use log::info;
 
 // DMA1/DMA2 cannot interact with our stack. Instead, buffers for use with the
@@ -31,7 +60,8 @@ use log::info;
 //
 // The runtime does not initialise these SRAM banks
 #[link_section = ".axisram.buffers"]
-static mut SHORT_BUFFER: MaybeUninit<[u8; 10]> = MaybeUninit::uninit();
+static SHORT_BUFFER: BorrowOnce<[MaybeUninit<u8>; 10]> =
+    BorrowOnce::new([const { MaybeUninit::uninit() }; 10]);
 
 #[link_section = ".axisram.buffers"]
 static mut LONG_BUFFER: MaybeUninit<[u32; 0x8000]> = MaybeUninit::uninit();
@@ -78,18 +108,21 @@ fn main() -> ! {
 
     let (tx, _rx) = serial.split();
 
+    let short_buffer: &mut [MaybeUninit<u8>; 10] = SHORT_BUFFER.get_mut();
+
     // Initialise the source buffer, without taking any references to
     // uninitialised memory
     let short_buffer: &'static mut [u8; 10] = {
-        let buf: &mut [MaybeUninit<u8>; 10] =
-            unsafe { &mut *(core::ptr::addr_of_mut!(SHORT_BUFFER) as *mut _) };
-
-        for (i, value) in buf.iter_mut().enumerate() {
+        for (i, value) in short_buffer.iter_mut().enumerate() {
             unsafe {
                 value.as_mut_ptr().write(i as u8 + 96); // 0x60, 0x61, 0x62...
             }
         }
-        unsafe { SHORT_BUFFER.assume_init_mut() }
+        unsafe {
+            mem::transmute::<&mut [MaybeUninit<u8>; 10], &mut [u8; 10]>(
+                short_buffer,
+            )
+        }
     };
     // view u32 buffer as u8. Endianess is undefined (little-endian on STM32H7)
     let long_buffer: &'static mut [u8; 0x2_0010] = {
