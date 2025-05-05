@@ -184,6 +184,11 @@ pub struct Sai<SAI, INTERFACE> {
     interface: INTERFACE,
 }
 
+#[cfg(feature = "rm0455")]
+#[allow(clippy::upper_case_acronyms)]
+pub(crate) type SAI<const A: usize> = stm32h7::Periph<crate::stm32::sai1::RegisterBlock, A>;
+
+#[cfg(not(feature = "rm0455"))]
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) type SAI<const A: usize> = stm32h7::Periph<crate::stm32::sai4::RegisterBlock, A>;
 
