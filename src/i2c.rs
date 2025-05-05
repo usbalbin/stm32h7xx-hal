@@ -136,8 +136,7 @@ macro_rules! busy_wait {
                 $i2c.icr().write(|w| w.arlocf().clear());
                 return Err(Error::Arbitration);
             } else if isr.nackf().bit_is_set() {
-                $i2c.icr()
-                    .write(|w| w.stopcf().clear().nackcf().clear());
+                $i2c.icr().write(|w| w.stopcf().clear().nackcf().clear());
                 flush_txdr!($i2c);
                 return Err(Error::NotAcknowledge);
             } else {
