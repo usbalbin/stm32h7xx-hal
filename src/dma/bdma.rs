@@ -597,11 +597,17 @@ impl<I: Instance, const S: u8> InstanceStream for StreamX<I, S> {
         //NOTE(unsafe) Atomic write with no side-effects and we only access the bits
         // that belongs to the StreamX
         let dma = unsafe { &*I::ptr() };
-        dma.ifcr().write(|w| w
-                        .ctcif(S).set_bit() //Clear transfer complete interrupt flag
-                        .chtif(S).set_bit() //Clear half transfer interrupt flag
-                        .cteif(S).set_bit() //Clear transfer error interrupt flag
-                        .cgif(S).set_bit() //Clear global interrupt flag
+        dma.ifcr().write(
+            |w| {
+                w.ctcif(S)
+                    .set_bit() //Clear transfer complete interrupt flag
+                    .chtif(S)
+                    .set_bit() //Clear half transfer interrupt flag
+                    .cteif(S)
+                    .set_bit() //Clear transfer error interrupt flag
+                    .cgif(S)
+                    .set_bit()
+            }, //Clear global interrupt flag
         );
         let _ = dma.isr().read();
         let _ = dma.isr().read(); // Delay 2 peripheral clocks

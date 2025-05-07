@@ -80,7 +80,8 @@ impl Error {
 }
 fn clear_error_flags(regs: &BANK) {
     regs.ccr().write(|w| {
-        let w = w.clr_pgserr()
+        let w = w
+            .clr_pgserr()
             .set_bit()
             .clr_wrperr()
             .set_bit()
@@ -89,9 +90,7 @@ fn clear_error_flags(regs: &BANK) {
             .clr_incerr();
 
         #[cfg(not(feature = "rm0455"))]
-        let w = w
-            .set_bit()
-            .clr_operr();
+        let w = w.set_bit().clr_operr();
 
         w.set_bit()
             .clr_rdperr()

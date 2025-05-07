@@ -186,46 +186,55 @@ pub struct Sai<SAI, INTERFACE> {
 
 #[cfg(feature = "rm0455")]
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) type SAI<const A: usize> = stm32h7::Periph<crate::stm32::sai1::RegisterBlock, A>;
+pub(crate) type SAI<const A: usize> =
+    stm32h7::Periph<crate::stm32::sai1::RegisterBlock, A>;
 
 #[cfg(not(feature = "rm0455"))]
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) type SAI<const A: usize> = stm32h7::Periph<crate::stm32::sai4::RegisterBlock, A>;
+pub(crate) type SAI<const A: usize> =
+    stm32h7::Periph<crate::stm32::sai4::RegisterBlock, A>;
 
 // Common to all interfaces
-impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE> 
-    where SAI<A>: GetClkSAI
+impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE>
+where
+    SAI<A>: GetClkSAI,
 {
     /// Low level RCC initialisation
-    fn sai_rcc_init(&mut self, prec: <SAI<A> as GetClkSAI>::Rec)
-    {
+    fn sai_rcc_init(&mut self, prec: <SAI<A> as GetClkSAI>::Rec) {
         let _ = prec.enable().reset(); // drop, can be recreated by free method
     }
 
     /// Access to the current master channel
     fn master_channel<F, T>(&self, func: F) -> T
-        where F: FnOnce(&CH) -> T,
+    where
+        F: FnOnce(&CH) -> T,
     {
         func(self.rb.ch(self.master_channel as usize))
     }
 
     /// Access to the current slave channel, if set
     fn slave_channel<F, T>(&self, func: F) -> Option<T>
-        where F: FnOnce(&CH) -> T,
+    where
+        F: FnOnce(&CH) -> T,
     {
-        self.slave_channel.map(|channel| func(self.rb.ch(channel as usize)))
+        self.slave_channel
+            .map(|channel| func(self.rb.ch(channel as usize)))
     }
 
     /// Start listening for `event` on a given `channel`
     pub fn listen(&mut self, channel: SaiChannel, event: Event) {
         let ch = &self.rb.ch(channel as usize);
         match event {
-            Event::Overdue              => ch.im().modify(|_, w| w.ovrudrie().set_bit()),
-            Event::Muted                => ch.im().modify(|_, w| w.mutedetie().set_bit()),
-            Event::WrongClock           => ch.im().modify(|_, w| w.wckcfgie().set_bit()),
-            Event::Data                 => ch.im().modify(|_, w| w.freqie().set_bit()),
-            Event::AnticipatedFrameSync => ch.im().modify(|_, w| w.afsdetie().set_bit()),
-            Event::LateFrameSync        => ch.im().modify(|_, w| w.lfsdetie().set_bit()),
+            Event::Overdue => ch.im().modify(|_, w| w.ovrudrie().set_bit()),
+            Event::Muted => ch.im().modify(|_, w| w.mutedetie().set_bit()),
+            Event::WrongClock => ch.im().modify(|_, w| w.wckcfgie().set_bit()),
+            Event::Data => ch.im().modify(|_, w| w.freqie().set_bit()),
+            Event::AnticipatedFrameSync => {
+                ch.im().modify(|_, w| w.afsdetie().set_bit())
+            }
+            Event::LateFrameSync => {
+                ch.im().modify(|_, w| w.lfsdetie().set_bit())
+            }
         };
     }
 
@@ -233,12 +242,18 @@ impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE>
     pub fn unlisten(&mut self, channel: SaiChannel, event: Event) {
         let ch = &self.rb.ch(channel as usize);
         match event {
-            Event::Overdue              => ch.im().modify(|_, w| w.ovrudrie().clear_bit()),
-            Event::Muted                => ch.im().modify(|_, w| w.mutedetie().clear_bit()),
-            Event::WrongClock           => ch.im().modify(|_, w| w.wckcfgie().clear_bit()),
-            Event::Data                 => ch.im().modify(|_, w| w.freqie().clear_bit()),
-            Event::AnticipatedFrameSync => ch.im().modify(|_, w| w.afsdetie().clear_bit()),
-            Event::LateFrameSync        => ch.im().modify(|_, w| w.lfsdetie().clear_bit()),
+            Event::Overdue => ch.im().modify(|_, w| w.ovrudrie().clear_bit()),
+            Event::Muted => ch.im().modify(|_, w| w.mutedetie().clear_bit()),
+            Event::WrongClock => {
+                ch.im().modify(|_, w| w.wckcfgie().clear_bit())
+            }
+            Event::Data => ch.im().modify(|_, w| w.freqie().clear_bit()),
+            Event::AnticipatedFrameSync => {
+                ch.im().modify(|_, w| w.afsdetie().clear_bit())
+            }
+            Event::LateFrameSync => {
+                ch.im().modify(|_, w| w.lfsdetie().clear_bit())
+            }
         };
         let _ = ch.im().read();
         let _ = ch.im().read(); // Delay 2 peripheral clocks
@@ -250,12 +265,14 @@ impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE>
     pub fn clear_irq(&mut self, channel: SaiChannel, event: Event) {
         let ch = &self.rb.ch(channel as usize);
         match event {
-            Event::Overdue              => ch.clrfr().write(|w| w.covrudr().set_bit()),
-            Event::Muted                => ch.clrfr().write(|w| w.cmutedet().set_bit()),
-            Event::WrongClock           => ch.clrfr().write(|w| w.cwckcfg().set_bit()),
-            Event::Data                 => 0, // Cleared by reading/writing data
-            Event::AnticipatedFrameSync => ch.clrfr().write(|w| w.cafsdet().set_bit()),
-            Event::LateFrameSync        => ch.clrfr().write(|w| w.clfsdet().set_bit()),
+            Event::Overdue => ch.clrfr().write(|w| w.covrudr().set_bit()),
+            Event::Muted => ch.clrfr().write(|w| w.cmutedet().set_bit()),
+            Event::WrongClock => ch.clrfr().write(|w| w.cwckcfg().set_bit()),
+            Event::Data => 0, // Cleared by reading/writing data
+            Event::AnticipatedFrameSync => {
+                ch.clrfr().write(|w| w.cafsdet().set_bit())
+            }
+            Event::LateFrameSync => ch.clrfr().write(|w| w.clfsdet().set_bit()),
         };
         let _ = ch.sr().read();
         let _ = ch.sr().read(); // Delay 2 peripheral clocks
@@ -274,13 +291,19 @@ impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE>
     /// Mute `channel`, this is checked at the start of each frame
     /// Meaningful only in Tx mode
     pub fn mute(&mut self, channel: SaiChannel) {
-        self.rb.ch(channel as usize).cr2().modify(|_, w| w.mute().enabled());
+        self.rb
+            .ch(channel as usize)
+            .cr2()
+            .modify(|_, w| w.mute().enabled());
     }
 
     /// Unmute `channel`, this is checked at the start of each frame
     /// Meaningful only in Tx mode
     pub fn unmute(&mut self, channel: SaiChannel) {
-        self.rb.ch(channel as usize).cr2().modify(|_, w| w.mute().disabled());
+        self.rb
+            .ch(channel as usize)
+            .cr2()
+            .modify(|_, w| w.mute().disabled());
     }
 
     /// Used to operate the audio block(s) with an external SAI for synchronization
@@ -296,15 +319,24 @@ impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE>
     /// Synchronization output for other SAI blocks
     pub fn set_sync_output(&mut self, channel: Option<SaiChannel>) {
         match channel {
-            Some(SaiChannel::ChannelA) => unsafe { &self.rb.gcr().modify(|_, w| w.syncout().bits(0b01) ) },
-            Some(SaiChannel::ChannelB) => unsafe { &self.rb.gcr().modify(|_, w| w.syncout().bits(0b10) ) },
-            None                       => unsafe { &self.rb.gcr().modify(|_, w| w.syncout().bits(0b00) ) },
+            Some(SaiChannel::ChannelA) => unsafe {
+                &self.rb.gcr().modify(|_, w| w.syncout().bits(0b01))
+            },
+            Some(SaiChannel::ChannelB) => unsafe {
+                &self.rb.gcr().modify(|_, w| w.syncout().bits(0b10))
+            },
+            None => unsafe {
+                &self.rb.gcr().modify(|_, w| w.syncout().bits(0b00))
+            },
         };
     }
 
     /// Enable DMA for the SAI peripheral.
     pub fn enable_dma(&mut self, channel: SaiChannel) {
-        self.rb.ch(channel as usize).cr1().modify(|_, w| w.dmaen().enabled());
+        self.rb
+            .ch(channel as usize)
+            .cr1()
+            .modify(|_, w| w.dmaen().enabled());
     }
 
     /// Releases the SAI peripheral
@@ -312,25 +344,20 @@ impl<INTERFACE, const A: usize> Sai<SAI<A>, INTERFACE>
         // Refer to RM0433 Rev 7 51.4.15 Disabling the SAI
 
         // Master: Clear SAIEN
-        self.master_channel(|ch| {
-            ch.cr1().modify(|_, w| w.saien().disabled())
-        });
+        self.master_channel(|ch| ch.cr1().modify(|_, w| w.saien().disabled()));
 
         // Master: Wait for SAI to clear at the end of the
         // frame
-        while self.master_channel(|ch| {
-            ch.cr1().read().saien().bit_is_set()
-        }) {}
+        while self.master_channel(|ch| ch.cr1().read().saien().bit_is_set()) {}
 
         // Slave: Clear SAIEN
-        self.slave_channel(|ch| {
-            ch.cr1().modify(|_, w| w.saien().disabled())
-        });
+        self.slave_channel(|ch| ch.cr1().modify(|_, w| w.saien().disabled()));
 
         // Slave: Wait for SAI to clear
-        while self.slave_channel(|ch| {
-            ch.cr1().read().saien().bit_is_set()
-        }).unwrap_or(false) {}
+        while self
+            .slave_channel(|ch| ch.cr1().read().saien().bit_is_set())
+            .unwrap_or(false)
+        {}
 
         (self.rb, unsafe { <SAI<A> as GetClkSAI>::Rec::new() })
     }
