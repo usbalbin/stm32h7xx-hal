@@ -174,15 +174,19 @@ impl UnlockedFlashBank<'_> {
 
         #[rustfmt::skip]
         self.bank.cr().modify(|_, w| unsafe {
-            w
-                // start
-                .start().set_bit()
-                // sector number
-                .snb().bits(sector)
-                // sector erase
-                .ser().set_bit()
+            // sector number
+            #[cfg(feature = "rm0455")]
+            let w = w.ssn().bits(sector);
+
+            #[cfg(not(feature = "rm0455"))]
+            let w = w.snb().bits(sector);
+
+            // sector erase
+            w.ser().set_bit()
                 // not programming
                 .pg().clear_bit()
+                // start
+                .start().set_bit()
         });
         self.wait_ready();
         self.ok()
